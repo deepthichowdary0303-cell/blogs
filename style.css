@@ -126,7 +126,7 @@ footer{border-top:1px solid var(--border);max-width:850px;margin:auto;padding:40
 .footer-links{display:flex;gap:18px;margin:25px 0}
 .footer-links a:hover{color:var(--accent)}
 @media(max-width:750px){
-  .nav-links{display:none}.hero{padding:70px 22px 50px}.article-section{padding:35px 20px}
+  .nav-links{display:flex;gap:14px;overflow-x:auto;white-space:nowrap;max-width:68vw;padding:3px 0}.nav{gap:16px;padding:12px 16px}.hero{padding:70px 22px 50px}.article-section{padding:35px 20px}
   .article-section h2{font-size:29px}.hero-subtitle{font-size:18px}
   .feature-gates{grid-template-columns:1fr 1fr}.search-grid{grid-template-columns:1fr}
   .search-arrow{justify-content:center;transform:rotate(90deg)}.agent-grid,.comparison,.tpe-steps{grid-template-columns:1fr}
