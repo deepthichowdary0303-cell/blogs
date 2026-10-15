@@ -157,6 +157,8 @@ const patternMiniGames = [
  {title:'Mission 6 · Find the pocket of missed cases',intro:'Most of the model’s predictions can be right while one small cluster is repeatedly missed. Choose a cluster to inspect.',controls:`<div class="game-control-card"><span class="control-label">Pick a cluster on the case map</span><div class="game-choice-row"><button class="game-choice active" data-cluster="A">Cluster A · Typical</button><button class="game-choice" data-cluster="B">Cluster B · Missed cases</button><button class="game-choice" data-cluster="C">Cluster C · Unclear</button></div><p>Each cluster represents a group of similar cases—not necessarily a real-world cause.</p></div><div class="game-control-card"><span class="control-label">Cases the model missed in this example</span><div class="game-value" id="clusterMissed">4 of 100</div><div class="game-meter"><span id="clusterMeter" style="width:4%"></span></div><p id="clusterNote">Cluster A mostly behaves as expected.</p></div>`,run(root){const d={A:['4 of 100',4,'Most cases in this group behave as expected.'],B:['31 of 100',78,'This group contains many more missed fraud cases. Investigate what these cases have in common.'],C:['9 of 100',23,'There may be a pattern, but the evidence is less clear. Gather more examples.']};const update=k=>{root.querySelectorAll('[data-cluster]').forEach(y=>y.classList.toggle('active',y.dataset.cluster===k));root.querySelector('#clusterMissed').textContent=d[k][0];root.querySelector('#clusterMeter').style.width=d[k][1]+'%';root.querySelector('#clusterNote').textContent=d[k][2];setMiniResult(k==='B'?'A blind spot may be hiding here':k==='A'?'Mostly expected behaviour':'Needs more evidence',d[k][2],k==='B'?'🛰️':'◈',k==='B'?'Describe this group and test it on later data':'Inspect another cluster')};root.querySelectorAll('[data-cluster]').forEach(x=>x.onclick=()=>update(x.dataset.cluster));update('A');return()=>update('A')}}
 ];
 let resetMiniGame=()=>{};
+let detectiveXP=0;
+const earnedActions=new Set();
 function setMiniResult(title,text,icon,lesson){const a=document.getElementById('gameResultTitle'),b=document.getElementById('gameResultText'),c=document.getElementById('gameIcon'),d=document.getElementById('gameLesson');if(a)a.textContent=title;if(b)b.textContent=text;if(c)c.textContent=icon;if(d)d.textContent=lesson;if(typeof awardXP==='function')awardXP('mini-'+document.getElementById('pTitle').textContent,5,'Clue tested')}
 function renderPatternGame(i){const g=patternMiniGames[i],root=document.getElementById('gameControls');document.getElementById('gameTitle').textContent=g.title;document.getElementById('gameIntro').textContent=g.intro;root.innerHTML=g.controls;resetMiniGame=g.run(root)||(()=>{});document.getElementById('gameReset').onclick=()=>{resetMiniGame();if(typeof awardXP==='function')awardXP('reset-pattern-'+i,2,'Clue reset and replayed')}}
 
@@ -165,11 +167,52 @@ patterns.forEach((p,i)=>{let b=document.createElement('button');b.className='pat
 function selectPattern(i){document.querySelectorAll('.pattern').forEach((e,j)=>e.classList.toggle('active',i===j));let p=patterns[i];document.getElementById('pTitle').textContent=p.title;document.getElementById('pDesc').textContent=p.look;document.getElementById('pMethod').textContent=p.method;document.getElementById('pRisk').textContent=p.risk;renderPatternGame(i)}
 selectPattern(0);
 const fmt=n=>Math.round(n).toLocaleString('en-US');
-function updateLab(){let n=+rows.value,o=+observed.value,p=+predicted.value;rowsOut.textContent=fmt(n);observedOut.textContent=o.toFixed(1)+'%';predictedOut.textContent=p.toFixed(1)+'%';rowsBar.style.width=(n/50000*100)+'%';observedBar.style.width=(o/30*100)+'%';predictedBar.style.width=(p/30*100)+'%';let ratio=o/p,expected=n*p/100,actual=n*o/100,excess=actual-expected,diff=o-p;liftOut.textContent=ratio.toFixed(1)+'× lift';oeOut.textContent=ratio.toFixed(1)+'×';excessOut.textContent=(excess>=0?'+':'')+fmt(excess);rateDiffOut.textContent=(diff>=0?'+':'')+diff.toFixed(1)+' pp';expectedCount.textContent=fmt(expected);actualCount.textContent=fmt(actual);expectedBar.style.width=(p/30*100)+'%';actualBar.style.width=(o/30*100)+'%';interpretation.textContent=ratio>=2?'Observed fraud is '+ratio.toFixed(1)+' times the baseline expectation. This is a candidate blind spot, not proof it will generalize.':ratio>1?'The group is riskier than expected, but the gap is modest. Check uncertainty and whether the extra cases matter.':'Observed fraud is at or below expectation; this setting is not evidence of an under-scored fraud pocket.';signalBadge.textContent=(n>=1000&&ratio>=1.5&&excess>=20)?'Promising lead · validate next':'Weak / uncertain lead · investigate cautiously';signalBadge.style.background=(n>=1000&&ratio>=1.5&&excess>=20)?'#d9f7ee':'#fff0dc';signalBadge.style.color=(n>=1000&&ratio>=1.5&&excess>=20)?'#11614e':'#93580a'}
-['rows','observed','predicted'].forEach(id=>document.getElementById(id).addEventListener('input',updateLab));updateLab();
+function updateLab(){
+  const get=id=>document.getElementById(id);
+  const n=Number(get('rows').value), o=Number(get('observed').value), p=Number(get('predicted').value);
+  const fmt=n=>Math.round(n).toLocaleString('en-US');
+  get('rowsOut').textContent=fmt(n);
+  get('observedOut').textContent=o.toFixed(1)+'%';
+  get('predictedOut').textContent=p.toFixed(1)+'%';
+  get('rowsBar').style.width=(n/50000*100)+'%';
+  get('observedBar').style.width=(o/30*100)+'%';
+  get('predictedBar').style.width=(p/30*100)+'%';
+  const ratio=o/Math.max(p,.1), expected=n*p/100, actual=n*o/100, excess=actual-expected, diff=o-p;
+  get('liftOut').textContent=ratio.toFixed(1)+'× lift';
+  get('oeOut').textContent=ratio.toFixed(1)+'×';
+  get('excessOut').textContent=(excess>=0?'+':'−')+fmt(Math.abs(excess))+' extra fraud cases';
+  get('rateDiffOut').textContent=(diff>=0?'+':'')+diff.toFixed(1)+' points';
+  get('expectedCount').textContent=fmt(expected)+' cases';
+  get('actualCount').textContent=fmt(actual)+' cases';
+  get('expectedLabel').textContent=fmt(expected)+' cases';
+  get('actualLabel').textContent=fmt(actual)+' cases';
+  get('expectedBar').style.width=(expected/Math.max(actual,expected,1)*100)+'%';
+  get('actualBar').style.width=(actual/Math.max(actual,expected,1)*100)+'%';
+  get('gapExplanation').textContent=excess>0
+    ? 'There were '+fmt(excess)+' more fraud cases than the model expected. That gap is a clue worth checking—not proof of a blind spot.'
+    : excess<0
+      ? 'There were '+fmt(Math.abs(excess))+' fewer fraud cases than expected. This group is not under-estimated in this scenario.'
+      : 'The model estimate matches reality. Try another combination of clues.';
+  get('interpretation').textContent=ratio>1
+    ? 'Reality is '+ratio.toFixed(1)+' times the model’s guess. Check whether the group is large enough and whether this repeats later.'
+    : ratio<1
+      ? 'The model expected more fraud than actually happened here. Check calibration and data quality.'
+      : 'The model’s guess matches the observed rate. Look for another group where reality and the model disagree.';
+  const promising=n>=1000&&ratio>=1.5&&excess>=20;
+  const badge=get('signalBadge');
+  badge.textContent=promising?'Promising clue · investigate next':ratio>1?'Possible clue · check support and stability':'No clear blind spot in this setup';
+  badge.style.background=promising?'#123c3b':'#34291b';
+  badge.style.color=promising?'#72e0d5':'#ffd08a';
+  get('verdictIcon').textContent=promising?'🔎':ratio>1?'🧭':'🧊';
+  get('verdictIcon').style.transform=promising?'scale(1.08)':'scale(1)';
+  const extraCard=get('excessOut').closest('.gap-reveal');
+  if(extraCard) extraCard.style.borderColor=excess>0?'#76532b':'#2a3b56';
+}
+
+['rows','observed','predicted'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updateLab)});updateLab();
 // Translate the live numbers into a plain-language case story.
 function updateCaseStory(){const n=+rows.value,o=+observed.value,p=+predicted.value;const actual=n*o/100,expected=n*p/100,extra=actual-expected,ratio=o/p;document.getElementById('actualLabel').textContent=fmt(actual)+' cases';document.getElementById('expectedLabel').textContent=fmt(expected)+' cases';document.getElementById('excessOut').textContent=(extra>=0?'+':'')+fmt(extra)+' extra fraud cases';document.getElementById('gapExplanation').textContent=extra>0?'There were '+fmt(extra)+' more fraud cases than the model expected. That gap may be a clue the model is missing something.':extra<0?'There were '+fmt(Math.abs(extra))+' fewer fraud cases than the model expected. This group does not look under-estimated in this scenario.':'The model’s estimate matches reality in this scenario—there is no gap to investigate here.';document.getElementById('oeOut').textContent=ratio.toFixed(1)+'×';document.getElementById('rateDiffOut').textContent=(o-p>=0?'+':'')+(o-p).toFixed(1)+' pts';document.getElementById('interpretation').textContent=ratio>1?'Reality is '+ratio.toFixed(1)+' times the model’s guess. Check whether this group is large enough and whether the pattern repeats later.':ratio<1?'The model expected more fraud than actually happened in this group. Check calibration and data quality before calling it a blind spot.':'The model’s guess matches the observed rate. Look for another group where reality and the model disagree.';const max=Math.max(actual,expected,1);document.getElementById('actualBar').style.width=(actual/max*100)+'%';document.getElementById('expectedBar').style.width=(expected/max*100)+'%';const badge=document.getElementById('signalBadge');const good=n>=1000&&ratio>=1.5&&extra>=20;badge.textContent=good?'Promising clue · investigate next':ratio>1?'Small or uncertain clue · check carefully':'No clear blind spot in this setup';document.getElementById('verdictIcon').textContent=good?'🔎':ratio>1?'🧭':'🧊';}
-['rows','observed','predicted'].forEach(id=>document.getElementById(id).addEventListener('input',updateCaseStory));updateCaseStory();
+updateCaseStory();
 document.getElementById('resetCase').addEventListener('click',()=>{rows.value=5000;observed.value=8;predicted.value=4;updateLab();updateCaseStory();document.getElementById('decisionFeedback').className='decision-feedback';document.getElementById('decisionFeedback').textContent='Case reset. Adjust the clues and make your call.';});
 function makeDecision(action){const n=+rows.value,o=+observed.value,p=+predicted.value,extra=n*(o-p)/100,ratio=o/p;const box=document.getElementById('decisionFeedback');box.className='decision-feedback';if(action==='investigate'){if(n>=1000&&ratio>=1.5&&extra>=20){box.classList.add('good');box.textContent='Good detective instinct. This is worth investigating because the gap is meaningful and the group has reasonable support. Next: check whether the clue repeats in later months, rule out data leakage, and test if it improves the model.';}else{box.classList.add('caution');box.textContent='You can investigate it, but don’t call it a discovery yet. The gap or group size may be too small. Gather more evidence, calculate uncertainty, and try the pattern on a later time period.';}}else{if(ratio<1.5||extra<20||n<1000){box.classList.add('good');box.textContent='Reasonable call. The current evidence is weak, small, or not clearly under-estimated. Record it as “not enough evidence” rather than declaring it impossible—new data may change the answer.';}else{box.classList.add('caution');box.textContent='Careful: this group looks like a potentially meaningful blind spot. Before dropping it, check stability and uncertainty on future data. A strong clue still needs proof.';}}if(typeof awardXP==='function')awardXP('decision-'+action,10,'Case decision recorded');}
 document.getElementById('chooseInvestigate').addEventListener('click',()=>makeDecision('investigate'));document.getElementById('chooseHold').addEventListener('click',()=>makeDecision('hold'));
@@ -195,7 +238,7 @@ document.querySelectorAll('.quiz-option').forEach(b=>b.onclick=()=>{document.que
 function toast(t){let e=document.getElementById('toast');e.textContent=t;e.classList.add('show');setTimeout(()=>e.classList.remove('show'),2200)}
 window.addEventListener('scroll',()=>{let max=document.documentElement.scrollHeight-innerHeight;progressBar.style.width=(max>0?scrollY/max*100:0)+'%'});
 // Lightweight game layer: award points for exploring and completing evidence checks.
-let detectiveXP=0;const earnedActions=new Set();function awardXP(key,points,message){if(earnedActions.has(key))return;earnedActions.add(key);detectiveXP+=points;const score=document.getElementById('xpScore'),fill=document.getElementById('xpFill');if(score)score.textContent=detectiveXP+' XP';if(fill)fill.style.width=Math.min(100,detectiveXP/100*100)+'%';const prog=document.getElementById('gameProgressText');if(prog)prog.textContent=detectiveXP>=80?'Mission clear · You challenged the evidence':detectiveXP>=35?'Good work · Keep testing the clues':'Mission 1 of 3 · Find a suspicious gap';if(message)toast('+'+points+' XP · '+message)}
+function awardXP(key,points,message){if(earnedActions.has(key))return;earnedActions.add(key);detectiveXP+=points;const score=document.getElementById('xpScore'),fill=document.getElementById('xpFill');if(score)score.textContent=detectiveXP+' XP';if(fill)fill.style.width=Math.min(100,detectiveXP/100*100)+'%';const prog=document.getElementById('gameProgressText');if(prog)prog.textContent=detectiveXP>=80?'Mission clear · You challenged the evidence':detectiveXP>=35?'Good work · Keep testing the clues':'Mission 1 of 3 · Find a suspicious gap';if(message)toast('+'+points+' XP · '+message)}
 ['rows','observed','predicted'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>awardXP('slider-'+id,10,'Evidence inspected'))});
 const originalSelectPattern=selectPattern;selectPattern=function(i){originalSelectPattern(i);awardXP('pattern-'+i,5,'New clue examined')};
 document.querySelectorAll('.case-switch button').forEach(b=>b.addEventListener('click',()=>awardXP('case-'+b.dataset.case,10,'Case scenario reviewed')));
